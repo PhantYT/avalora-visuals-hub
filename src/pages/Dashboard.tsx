@@ -5,9 +5,11 @@ import { Navbar } from "@/components/Navbar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Key, Shield, Calendar, Copy, Check } from "lucide-react";
+import { Key, Shield, Calendar, Copy, Check, TrendingUp, Package } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ProfileCard } from "@/components/ProfileCard";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface License {
   id: string;
@@ -79,6 +81,19 @@ const Dashboard = () => {
     return () => subscription.unsubscribe();
   }, [navigate]);
 
+  const refetchProfile = () => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (session) {
+        const { data: profileData } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("id", session.user.id)
+          .single();
+        setProfile(profileData);
+      }
+    });
+  };
+
   const copyToClipboard = async (key: string) => {
     await navigator.clipboard.writeText(key);
     setCopiedKey(key);
@@ -116,6 +131,49 @@ const Dashboard = () => {
           <p className="text-foreground/60">Добро пожаловать, {profile?.username || "пользователь"}!</p>
         </div>
 
+        {/* Stats Overview */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <Card className="bg-gradient-card border-primary/20 shadow-card-custom">
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-foreground/60 mb-1">Всего лицензий</p>
+                  <p className="text-3xl font-bold text-primary">{licenses.length}</p>
+                </div>
+                <Package className="w-12 h-12 text-primary/30" />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-gradient-card border-primary/20 shadow-card-custom">
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-foreground/60 mb-1">Активных лицензий</p>
+                  <p className="text-3xl font-bold text-accent">
+                    {licenses.filter(l => l.is_active).length}
+                  </p>
+                </div>
+                <TrendingUp className="w-12 h-12 text-accent/30" />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-gradient-card border-primary/20 shadow-card-custom">
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-foreground/60 mb-1">Дней с нами</p>
+                  <p className="text-3xl font-bold text-blue-neon">
+                    {profile ? Math.floor((new Date().getTime() - new Date(profile.created_at).getTime()) / (1000 * 60 * 60 * 24)) : 0}
+                  </p>
+                </div>
+                <Calendar className="w-12 h-12 text-blue-neon/30" />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
         {isAdmin && (
           <Card className="mb-6 bg-primary/10 border-primary/30">
             <CardHeader>
@@ -135,74 +193,98 @@ const Dashboard = () => {
           </Card>
         )}
 
-        <Card className="bg-card/50 backdrop-blur-xl border-primary/20 shadow-card-custom">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Key className="w-5 h-5 text-primary" />
-              Ваши лицензии
-            </CardTitle>
-            <CardDescription>
-              {licenses.length === 0 
-                ? "У вас пока нет активных лицензий" 
-                : `Всего лицензий: ${licenses.length}`
-              }
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {licenses.length === 0 ? (
-              <div className="text-center py-12">
-                <Key className="w-16 h-16 mx-auto mb-4 text-muted-foreground" />
-                <p className="text-foreground/60 mb-4">У вас пока нет лицензий</p>
-                <Button variant="outline" className="border-primary/50">
-                  Купить лицензию
-                </Button>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {licenses.map((license) => (
-                  <div
-                    key={license.id}
-                    className="p-4 rounded-lg border border-primary/20 bg-gradient-card hover:border-primary/40 transition-all"
-                  >
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex items-center gap-2">
-                        <Badge variant={license.is_active ? "default" : "secondary"}>
-                          {license.is_active ? "Активна" : "Неактивна"}
-                        </Badge>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => copyToClipboard(license.license_key)}
-                        className="h-8 w-8 p-0"
-                      >
-                        {copiedKey === license.license_key ? (
-                          <Check className="w-4 h-4 text-green-500" />
-                        ) : (
-                          <Copy className="w-4 h-4" />
-                        )}
-                      </Button>
-                    </div>
-                    <div className="font-mono text-sm bg-background/50 p-3 rounded border border-primary/10 mb-3">
-                      {license.license_key}
-                    </div>
-                    <div className="flex items-center gap-4 text-xs text-foreground/60">
-                      <div className="flex items-center gap-1">
-                        <Calendar className="w-3 h-3" />
-                        Создано: {new Date(license.created_at).toLocaleDateString()}
-                      </div>
-                      {license.expires_at && (
-                        <div className="flex items-center gap-1">
-                          Истекает: {new Date(license.expires_at).toLocaleDateString()}
-                        </div>
-                      )}
-                    </div>
+        <Tabs defaultValue="licenses" className="space-y-6">
+          <TabsList className="grid w-full grid-cols-2 max-w-md">
+            <TabsTrigger value="licenses">
+              <Key className="w-4 h-4 mr-2" />
+              Лицензии
+            </TabsTrigger>
+            <TabsTrigger value="profile">
+              <Shield className="w-4 h-4 mr-2" />
+              Профиль
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="profile">
+            <ProfileCard user={user} profile={profile} onProfileUpdate={refetchProfile} />
+          </TabsContent>
+
+          <TabsContent value="licenses">
+
+            <Card className="bg-card/50 backdrop-blur-xl border-primary/20 shadow-card-custom">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Key className="w-5 h-5 text-primary" />
+                  Ваши лицензии
+                </CardTitle>
+                <CardDescription>
+                  {licenses.length === 0 
+                    ? "У вас пока нет активных лицензий" 
+                    : `Всего лицензий: ${licenses.length}`
+                  }
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {licenses.length === 0 ? (
+                  <div className="text-center py-12">
+                    <Key className="w-16 h-16 mx-auto mb-4 text-muted-foreground" />
+                    <p className="text-foreground/60 mb-4">У вас пока нет лицензий</p>
+                    <Button 
+                      variant="outline" 
+                      className="border-primary/50"
+                      onClick={() => navigate("/pricing")}
+                    >
+                      Купить лицензию
+                    </Button>
                   </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                ) : (
+                  <div className="space-y-4">
+                    {licenses.map((license) => (
+                      <div
+                        key={license.id}
+                        className="p-4 rounded-lg border border-primary/20 bg-gradient-card hover:border-primary/40 transition-all"
+                      >
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex items-center gap-2">
+                            <Badge variant={license.is_active ? "default" : "secondary"}>
+                              {license.is_active ? "Активна" : "Неактивна"}
+                            </Badge>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => copyToClipboard(license.license_key)}
+                            className="h-8 w-8 p-0"
+                          >
+                            {copiedKey === license.license_key ? (
+                              <Check className="w-4 h-4 text-green-500" />
+                            ) : (
+                              <Copy className="w-4 h-4" />
+                            )}
+                          </Button>
+                        </div>
+                        <div className="font-mono text-sm bg-background/50 p-3 rounded border border-primary/10 mb-3">
+                          {license.license_key}
+                        </div>
+                        <div className="flex items-center gap-4 text-xs text-foreground/60">
+                          <div className="flex items-center gap-1">
+                            <Calendar className="w-3 h-3" />
+                            Создано: {new Date(license.created_at).toLocaleDateString()}
+                          </div>
+                          {license.expires_at && (
+                            <div className="flex items-center gap-1">
+                              Истекает: {new Date(license.expires_at).toLocaleDateString()}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );

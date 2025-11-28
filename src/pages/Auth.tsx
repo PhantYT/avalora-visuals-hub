@@ -7,14 +7,18 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, ArrowLeft } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Navbar } from "@/components/Navbar";
 import { z } from "zod";
+import { Mail, Lock, User, ArrowLeft } from "lucide-react";
 
 const authSchema = z.object({
   email: z.string().email({ message: "Неверный формат email" }),
   password: z.string().min(6, { message: "Пароль должен быть минимум 6 символов" }),
   username: z.string().min(3, { message: "Имя пользователя должно быть минимум 3 символа" }).optional(),
+});
+
+const emailSchema = z.object({
+  email: z.string().email({ message: "Неверный формат email" }),
 });
 
 const Auth = () => {
@@ -24,8 +28,10 @@ const Auth = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [username, setUsername] = useState("");
+  const [resetMode, setResetMode] = useState(false);
 
   useEffect(() => {
+    // Check if user is already logged in
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
         navigate("/dashboard");
@@ -41,59 +47,16 @@ const Auth = () => {
     return () => subscription.unsubscribe();
   }, [navigate]);
 
-  const handleSignUp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-
-    try {
-      const validatedData = authSchema.parse({ email, password, username });
-      
-      const { error } = await supabase.auth.signUp({
-        email: validatedData.email,
-        password: validatedData.password,
-        options: {
-          data: {
-            username: validatedData.username,
-          },
-          emailRedirectTo: `${window.location.origin}/`,
-        },
-      });
-
-      if (error) throw error;
-
-      toast({
-        title: "Успешно!",
-        description: "Регистрация завершена. Добро пожаловать!",
-      });
-    } catch (error: any) {
-      if (error instanceof z.ZodError) {
-        toast({
-          title: "Ошибка валидации",
-          description: error.errors[0].message,
-          variant: "destructive",
-        });
-      } else {
-        toast({
-          title: "Ошибка регистрации",
-          description: error.message || "Попробуйте снова",
-          variant: "destructive",
-        });
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      const validatedData = authSchema.omit({ username: true }).parse({ email, password });
-      
+      authSchema.omit({ username: true }).parse({ email, password });
+
       const { error } = await supabase.auth.signInWithPassword({
-        email: validatedData.email,
-        password: validatedData.password,
+        email,
+        password,
       });
 
       if (error) throw error;
@@ -112,7 +75,97 @@ const Auth = () => {
       } else {
         toast({
           title: "Ошибка входа",
-          description: error.message || "Проверьте данные и попробуйте снова",
+          description: error.message,
+          variant: "destructive",
+        });
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSignUp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+
+    try {
+      authSchema.parse({ email, password, username });
+
+      const redirectUrl = `${window.location.origin}/`;
+
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: redirectUrl,
+          data: {
+            username,
+          },
+        },
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Проверьте почту!",
+        description: "Мы отправили вам письмо для подтверждения аккаунта",
+      });
+
+      setEmail("");
+      setPassword("");
+      setUsername("");
+    } catch (error: any) {
+      if (error instanceof z.ZodError) {
+        toast({
+          title: "Ошибка валидации",
+          description: error.errors[0].message,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Ошибка регистрации",
+          description: error.message,
+          variant: "destructive",
+        });
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+
+    try {
+      emailSchema.parse({ email });
+
+      const redirectUrl = `${window.location.origin}/auth`;
+
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: redirectUrl,
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Проверьте почту!",
+        description: "Мы отправили вам ссылку для восстановления пароля",
+      });
+
+      setResetMode(false);
+      setEmail("");
+    } catch (error: any) {
+      if (error instanceof z.ZodError) {
+        toast({
+          title: "Ошибка валидации",
+          description: error.errors[0].message,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Ошибка",
+          description: error.message,
           variant: "destructive",
         });
       }
@@ -122,120 +175,178 @@ const Auth = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-hero relative overflow-hidden">
-      {/* Background effects */}
-      <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/10 rounded-full blur-[120px]" />
-      <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-accent/10 rounded-full blur-[120px]" />
+    <div className="min-h-screen bg-gradient-hero">
+      <Navbar user={null} />
       
-      <Link to="/" className="absolute top-8 left-8">
-        <Button variant="ghost" className="gap-2">
-          <ArrowLeft className="w-4 h-4" />
-          На главную
-        </Button>
-      </Link>
-
-      <Card className="w-full max-w-md bg-card/50 backdrop-blur-xl border-primary/20 shadow-card-custom relative z-10">
-        <CardHeader className="text-center">
-          <CardTitle className="text-3xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-            Avalora Visuals
-          </CardTitle>
-          <CardDescription>Войдите или зарегистрируйтесь</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Tabs defaultValue="signin" className="w-full">
-            <TabsList className="grid w-full grid-cols-2 mb-8">
-              <TabsTrigger value="signin">Вход</TabsTrigger>
-              <TabsTrigger value="signup">Регистрация</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="signin">
-              <form onSubmit={handleSignIn} className="space-y-4">
+      <div className="container mx-auto px-4 pt-24 pb-12 flex items-center justify-center min-h-screen">
+        <Card className="w-full max-w-md bg-card/50 backdrop-blur-xl border-primary/20 shadow-card-custom">
+          <CardHeader className="text-center">
+            <CardTitle className="text-3xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+              {resetMode ? "Восстановление пароля" : "Добро пожаловать"}
+            </CardTitle>
+            <CardDescription>
+              {resetMode 
+                ? "Введите email для восстановления пароля" 
+                : "Войдите или создайте новый аккаунт"
+              }
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {resetMode ? (
+              <form onSubmit={handleResetPassword} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="signin-email">Email</Label>
+                  <Label htmlFor="reset-email" className="flex items-center gap-2">
+                    <Mail className="w-4 h-4 text-primary" />
+                    Email
+                  </Label>
                   <Input
-                    id="signin-email"
+                    id="reset-email"
                     type="email"
                     placeholder="your@email.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
-                    disabled={loading}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="signin-password">Пароль</Label>
-                  <Input
-                    id="signin-password"
-                    type="password"
-                    placeholder="••••••"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    disabled={loading}
+                    className="bg-background/50 border-primary/20 focus:border-primary"
                   />
                 </div>
                 <Button 
                   type="submit" 
-                  className="w-full bg-primary hover:bg-primary/90 shadow-glow" 
+                  className="w-full bg-primary hover:bg-primary/90 shadow-glow"
                   disabled={loading}
                 >
-                  {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Войти
+                  {loading ? "Отправка..." : "Отправить ссылку"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => {
+                    setResetMode(false);
+                    setEmail("");
+                  }}
+                  className="w-full"
+                >
+                  <ArrowLeft className="w-4 h-4 mr-2" />
+                  Назад к входу
                 </Button>
               </form>
-            </TabsContent>
+            ) : (
+              <Tabs defaultValue="signin" className="w-full">
+                <TabsList className="grid w-full grid-cols-2 mb-6">
+                  <TabsTrigger value="signin">Вход</TabsTrigger>
+                  <TabsTrigger value="signup">Регистрация</TabsTrigger>
+                </TabsList>
 
-            <TabsContent value="signup">
-              <form onSubmit={handleSignUp} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="signup-username">Имя пользователя</Label>
-                  <Input
-                    id="signup-username"
-                    type="text"
-                    placeholder="username"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    required
-                    disabled={loading}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="signup-email">Email</Label>
-                  <Input
-                    id="signup-email"
-                    type="email"
-                    placeholder="your@email.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                    disabled={loading}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="signup-password">Пароль</Label>
-                  <Input
-                    id="signup-password"
-                    type="password"
-                    placeholder="••••••"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    disabled={loading}
-                  />
-                </div>
-                <Button 
-                  type="submit" 
-                  className="w-full bg-primary hover:bg-primary/90 shadow-glow" 
-                  disabled={loading}
-                >
-                  {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Зарегистрироваться
-                </Button>
-              </form>
-            </TabsContent>
-          </Tabs>
-        </CardContent>
-      </Card>
+                <TabsContent value="signin">
+                  <form onSubmit={handleSignIn} className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="signin-email" className="flex items-center gap-2">
+                        <Mail className="w-4 h-4 text-primary" />
+                        Email
+                      </Label>
+                      <Input
+                        id="signin-email"
+                        type="email"
+                        placeholder="your@email.com"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        required
+                        className="bg-background/50 border-primary/20 focus:border-primary"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="signin-password" className="flex items-center gap-2">
+                        <Lock className="w-4 h-4 text-primary" />
+                        Пароль
+                      </Label>
+                      <Input
+                        id="signin-password"
+                        type="password"
+                        placeholder="••••••••"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        required
+                        className="bg-background/50 border-primary/20 focus:border-primary"
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      variant="link"
+                      onClick={() => setResetMode(true)}
+                      className="px-0 text-primary hover:text-primary/80"
+                    >
+                      Забыли пароль?
+                    </Button>
+                    <Button 
+                      type="submit" 
+                      className="w-full bg-primary hover:bg-primary/90 shadow-glow"
+                      disabled={loading}
+                    >
+                      {loading ? "Вход..." : "Войти"}
+                    </Button>
+                  </form>
+                </TabsContent>
+
+                <TabsContent value="signup">
+                  <form onSubmit={handleSignUp} className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="signup-username" className="flex items-center gap-2">
+                        <User className="w-4 h-4 text-primary" />
+                        Имя пользователя
+                      </Label>
+                      <Input
+                        id="signup-username"
+                        type="text"
+                        placeholder="Ваше имя"
+                        value={username}
+                        onChange={(e) => setUsername(e.target.value)}
+                        required
+                        className="bg-background/50 border-primary/20 focus:border-primary"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="signup-email" className="flex items-center gap-2">
+                        <Mail className="w-4 h-4 text-primary" />
+                        Email
+                      </Label>
+                      <Input
+                        id="signup-email"
+                        type="email"
+                        placeholder="your@email.com"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        required
+                        className="bg-background/50 border-primary/20 focus:border-primary"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="signup-password" className="flex items-center gap-2">
+                        <Lock className="w-4 h-4 text-primary" />
+                        Пароль
+                      </Label>
+                      <Input
+                        id="signup-password"
+                        type="password"
+                        placeholder="••••••••"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        required
+                        className="bg-background/50 border-primary/20 focus:border-primary"
+                      />
+                    </div>
+                    <Button 
+                      type="submit" 
+                      className="w-full bg-gradient-to-r from-primary to-accent hover:opacity-90 shadow-glow"
+                      disabled={loading}
+                    >
+                      {loading ? "Регистрация..." : "Создать аккаунт"}
+                    </Button>
+                  </form>
+                </TabsContent>
+              </Tabs>
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 };

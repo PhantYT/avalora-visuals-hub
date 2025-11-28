@@ -47,6 +47,71 @@ export type Database = {
         }
         Relationships: []
       }
+      pricing_tiers: {
+        Row: {
+          created_at: string | null
+          duration_days: number | null
+          duration_type: string
+          id: string
+          price: number
+          product_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          duration_days?: number | null
+          duration_type: string
+          id?: string
+          price: number
+          product_id: string
+        }
+        Update: {
+          created_at?: string | null
+          duration_days?: number | null
+          duration_type?: string
+          id?: string
+          price?: number
+          product_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pricing_tiers_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      products: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          features: string[] | null
+          id: string
+          is_beta: boolean | null
+          name: string
+          slug: string
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          features?: string[] | null
+          id?: string
+          is_beta?: boolean | null
+          name: string
+          slug: string
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          features?: string[] | null
+          id?: string
+          is_beta?: boolean | null
+          name?: string
+          slug?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
