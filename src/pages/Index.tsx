@@ -3,6 +3,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { Navbar } from "@/components/Navbar";
 import { Hero } from "@/components/Hero";
 import { Features } from "@/components/Features";
+import { VideoShowcase } from "@/components/VideoShowcase";
+import { SocialLinks } from "@/components/SocialLinks";
 
 const Index = () => {
   const [user, setUser] = useState<any>(null);
@@ -24,6 +26,8 @@ const Index = () => {
       <Navbar user={user} />
       <Hero />
       <Features />
+      <VideoShowcase />
+      <SocialLinks />
     </div>
   );
 };
