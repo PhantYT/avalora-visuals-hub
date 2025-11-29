@@ -5,8 +5,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { User, Mail, Calendar, Edit2, Check, X } from "lucide-react";
+import { User, Mail, Calendar, Edit2, Check, X, Lock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { z } from "zod";
+
+const passwordSchema = z.string().min(6, "Пароль должен содержать минимум 6 символов");
 
 interface ProfileCardProps {
   user: any;
@@ -20,6 +23,9 @@ export const ProfileCard = ({ user, profile, onProfileUpdate }: ProfileCardProps
   const [username, setUsername] = useState(profile?.username || "");
   const [avatarUrl, setAvatarUrl] = useState(profile?.avatar_url || "");
   const [loading, setLoading] = useState(false);
+  const [changePassword, setChangePassword] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
 
   const handleSave = async () => {
     setLoading(true);
@@ -40,6 +46,52 @@ export const ProfileCard = ({ user, profile, onProfileUpdate }: ProfileCardProps
       });
       setIsEditing(false);
       onProfileUpdate();
+    } catch (error: any) {
+      toast({
+        title: "Ошибка",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePasswordChange = async () => {
+    if (newPassword !== confirmPassword) {
+      toast({
+        title: "Ошибка",
+        description: "Пароли не совпадают",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const validation = passwordSchema.safeParse(newPassword);
+    if (!validation.success) {
+      toast({
+        title: "Ошибка",
+        description: validation.error.errors[0].message,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.updateUser({
+        password: newPassword
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Успешно",
+        description: "Пароль успешно изменен",
+      });
+      setChangePassword(false);
+      setNewPassword("");
+      setConfirmPassword("");
     } catch (error: any) {
       toast({
         title: "Ошибка",
@@ -174,6 +226,65 @@ export const ProfileCard = ({ user, profile, onProfileUpdate }: ProfileCardProps
               day: "numeric",
             })}
           </div>
+        </div>
+
+        {/* Change Password */}
+        <div className="pt-4 border-t border-primary/20">
+          {!changePassword ? (
+            <Button
+              variant="outline"
+              onClick={() => setChangePassword(true)}
+              className="w-full border-primary/30 hover:bg-primary/10"
+            >
+              <Lock className="w-4 h-4 mr-2" />
+              Изменить пароль
+            </Button>
+          ) : (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="new-password">Новый пароль</Label>
+                <Input
+                  id="new-password"
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className="bg-background/50 border-primary/20"
+                  placeholder="Минимум 6 символов"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="confirm-password">Повторите пароль</Label>
+                <Input
+                  id="confirm-password"
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="bg-background/50 border-primary/20"
+                  placeholder="Повторите новый пароль"
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setChangePassword(false);
+                    setNewPassword("");
+                    setConfirmPassword("");
+                  }}
+                  className="flex-1"
+                >
+                  Отмена
+                </Button>
+                <Button
+                  onClick={handlePasswordChange}
+                  disabled={loading}
+                  className="flex-1 bg-primary hover:bg-primary/90"
+                >
+                  {loading ? "Изменение..." : "Изменить"}
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       </CardContent>
     </Card>
