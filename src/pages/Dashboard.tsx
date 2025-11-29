@@ -2,14 +2,15 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Navbar } from "@/components/Navbar";
+import { ProfileCard } from "@/components/ProfileCard";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Key, Shield, Calendar, Copy, Check, TrendingUp, Package } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
-import { Skeleton } from "@/components/ui/skeleton";
-import { ProfileCard } from "@/components/ProfileCard";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
+import { Copy, Check, Key, User as UserIcon, Shield, Package } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { motion } from "framer-motion";
+import dashboardBg from "@/assets/dashboard-bg.jpg";
 
 interface License {
   id: string;
@@ -40,17 +41,8 @@ const Dashboard = () => {
       }
 
       setUser(session.user);
+      await fetchProfile(session.user.id);
 
-      // Fetch profile
-      const { data: profileData } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", session.user.id)
-        .single();
-
-      setProfile(profileData);
-
-      // Check if user is admin
       const { data: rolesData } = await supabase
         .from("user_roles")
         .select("role")
@@ -59,7 +51,6 @@ const Dashboard = () => {
       const adminRole = rolesData?.find((r: any) => r.role === "admin");
       setIsAdmin(!!adminRole);
 
-      // Fetch licenses
       const { data: licensesData } = await supabase
         .from("licenses")
         .select("*")
@@ -81,17 +72,17 @@ const Dashboard = () => {
     return () => subscription.unsubscribe();
   }, [navigate]);
 
-  const refetchProfile = () => {
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (session) {
-        const { data: profileData } = await supabase
-          .from("profiles")
-          .select("*")
-          .eq("id", session.user.id)
-          .single();
-        setProfile(profileData);
-      }
-    });
+  const fetchProfile = async (userId?: string) => {
+    const uid = userId || user?.id;
+    if (!uid) return;
+
+    const { data: profileData } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", uid)
+      .single();
+
+    setProfile(profileData);
   };
 
   const copyToClipboard = async (key: string) => {
@@ -106,185 +97,182 @@ const Dashboard = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-hero">
-        <Navbar user={user} />
-        <div className="container mx-auto px-4 pt-24">
-          <Skeleton className="h-12 w-64 mb-8" />
-          <div className="grid gap-6">
-            <Skeleton className="h-48" />
-            <Skeleton className="h-48" />
-          </div>
-        </div>
+      <div className="min-h-screen bg-gradient-hero flex items-center justify-center">
+        <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-hero">
+    <div className="min-h-screen bg-gradient-hero relative">
+      <div className="fixed inset-0 opacity-10 pointer-events-none">
+        <div 
+          className="absolute inset-0"
+          style={{
+            backgroundImage: `url(${dashboardBg})`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            backgroundAttachment: 'fixed',
+          }}
+        />
+      </div>
+      
       <Navbar user={user} />
       
-      <div className="container mx-auto px-4 pt-24 pb-12">
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold mb-2 bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+      <div className="container mx-auto px-4 pt-24 pb-12 relative z-10">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6 }}
+          className="mb-8"
+        >
+          <h1 className="text-5xl font-bold mb-2 bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
             Личный кабинет
           </h1>
-          <p className="text-foreground/60">Добро пожаловать, {profile?.username || "пользователь"}!</p>
-        </div>
+          <p className="text-foreground/60">Управляйте своими лицензиями и профилем</p>
+        </motion.div>
 
-        {/* Stats Overview */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <Card className="bg-gradient-card border-primary/20 shadow-card-custom">
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-foreground/60 mb-1">Всего лицензий</p>
-                  <p className="text-3xl font-bold text-primary">{licenses.length}</p>
-                </div>
-                <Package className="w-12 h-12 text-primary/30" />
-              </div>
-            </CardContent>
-          </Card>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.2 }}
+        >
+          <Tabs defaultValue="licenses" className="space-y-6">
+            <TabsList className="grid w-full grid-cols-2 max-w-md">
+              <TabsTrigger value="licenses" className="flex items-center gap-2">
+                <Key className="w-4 h-4" />
+                Лицензии
+              </TabsTrigger>
+              <TabsTrigger value="profile" className="flex items-center gap-2">
+                <UserIcon className="w-4 h-4" />
+                Профиль
+              </TabsTrigger>
+            </TabsList>
 
-          <Card className="bg-gradient-card border-primary/20 shadow-card-custom">
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-foreground/60 mb-1">Активных лицензий</p>
-                  <p className="text-3xl font-bold text-accent">
-                    {licenses.filter(l => l.is_active).length}
-                  </p>
-                </div>
-                <TrendingUp className="w-12 h-12 text-accent/30" />
-              </div>
-            </CardContent>
-          </Card>
+            <TabsContent value="licenses" className="space-y-6">
+              {isAdmin && (
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.4 }}
+                >
+                  <Card className="bg-gradient-card border-accent/40 shadow-neon">
+                    <CardContent className="pt-6">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <Shield className="w-8 h-8 text-accent" />
+                          <div>
+                            <h3 className="text-xl font-bold">Панель администратора</h3>
+                            <p className="text-sm text-foreground/60">Управление системой</p>
+                          </div>
+                        </div>
+                        <Button
+                          onClick={() => navigate("/admin")}
+                          className="bg-accent hover:bg-accent/90 shadow-neon"
+                        >
+                          Открыть панель
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              )}
 
-          <Card className="bg-gradient-card border-primary/20 shadow-card-custom">
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-foreground/60 mb-1">Дней с нами</p>
-                  <p className="text-3xl font-bold text-blue-neon">
-                    {profile ? Math.floor((new Date().getTime() - new Date(profile.created_at).getTime()) / (1000 * 60 * 60 * 24)) : 0}
-                  </p>
-                </div>
-                <Calendar className="w-12 h-12 text-blue-neon/30" />
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {isAdmin && (
-          <Card className="mb-6 bg-primary/10 border-primary/30">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Shield className="w-5 h-5 text-primary" />
-                Админ панель
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Button 
-                onClick={() => navigate("/admin")} 
-                className="bg-primary hover:bg-primary/90 shadow-glow"
-              >
-                Перейти в админ панель
-              </Button>
-            </CardContent>
-          </Card>
-        )}
-
-        <Tabs defaultValue="licenses" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-2 max-w-md">
-            <TabsTrigger value="licenses">
-              <Key className="w-4 h-4 mr-2" />
-              Лицензии
-            </TabsTrigger>
-            <TabsTrigger value="profile">
-              <Shield className="w-4 h-4 mr-2" />
-              Профиль
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="profile">
-            <ProfileCard user={user} profile={profile} onProfileUpdate={refetchProfile} />
-          </TabsContent>
-
-          <TabsContent value="licenses">
-
-            <Card className="bg-card/50 backdrop-blur-xl border-primary/20 shadow-card-custom">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Key className="w-5 h-5 text-primary" />
-                  Ваши лицензии
-                </CardTitle>
-                <CardDescription>
-                  {licenses.length === 0 
-                    ? "У вас пока нет активных лицензий" 
-                    : `Всего лицензий: ${licenses.length}`
-                  }
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {licenses.length === 0 ? (
-                  <div className="text-center py-12">
-                    <Key className="w-16 h-16 mx-auto mb-4 text-muted-foreground" />
-                    <p className="text-foreground/60 mb-4">У вас пока нет лицензий</p>
+              {licenses.length === 0 ? (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ duration: 0.4 }}
+                >
+                  <Card className="bg-gradient-card border-primary/20 text-center p-12">
+                    <Key className="w-16 h-16 mx-auto mb-4 text-primary/50" />
+                    <h3 className="text-2xl font-bold mb-2">Нет активных лицензий</h3>
+                    <p className="text-foreground/60 mb-6">
+                      Приобретите лицензию, чтобы получить доступ к визуалам
+                    </p>
                     <Button 
-                      variant="outline" 
-                      className="border-primary/50"
-                      onClick={() => navigate("/pricing")}
+                      onClick={() => navigate("/")}
+                      className="bg-primary hover:bg-primary/90 shadow-glow"
                     >
-                      Купить лицензию
+                      Посмотреть товары
                     </Button>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {licenses.map((license) => (
-                      <div
-                        key={license.id}
-                        className="p-4 rounded-lg border border-primary/20 bg-gradient-card hover:border-primary/40 transition-all"
-                      >
-                        <div className="flex items-start justify-between mb-3">
-                          <div className="flex items-center gap-2">
+                  </Card>
+                </motion.div>
+              ) : (
+                <div className="grid gap-6">
+                  {licenses.map((license, index) => (
+                    <motion.div
+                      key={license.id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.4, delay: index * 0.1 }}
+                    >
+                      <Card className={`bg-gradient-card border-primary/20 shadow-card-custom ${!license.is_active && 'opacity-60'}`}>
+                        <CardHeader>
+                          <div className="flex items-center justify-between">
+                            <CardTitle className="flex items-center gap-2">
+                              <Key className="w-5 h-5 text-primary" />
+                              Лицензионный ключ
+                            </CardTitle>
                             <Badge variant={license.is_active ? "default" : "secondary"}>
                               {license.is_active ? "Активна" : "Неактивна"}
                             </Badge>
                           </div>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => copyToClipboard(license.license_key)}
-                            className="h-8 w-8 p-0"
-                          >
-                            {copiedKey === license.license_key ? (
-                              <Check className="w-4 h-4 text-green-500" />
-                            ) : (
-                              <Copy className="w-4 h-4" />
-                            )}
-                          </Button>
-                        </div>
-                        <div className="font-mono text-sm bg-background/50 p-3 rounded border border-primary/10 mb-3">
-                          {license.license_key}
-                        </div>
-                        <div className="flex items-center gap-4 text-xs text-foreground/60">
-                          <div className="flex items-center gap-1">
-                            <Calendar className="w-3 h-3" />
-                            Создано: {new Date(license.created_at).toLocaleDateString()}
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                          <div className="flex items-center gap-2">
+                            <code className="flex-1 px-4 py-3 bg-background/50 rounded-lg border border-primary/20 text-sm font-mono">
+                              {license.license_key}
+                            </code>
+                            <Button
+                              size="icon"
+                              variant="outline"
+                              onClick={() => copyToClipboard(license.license_key)}
+                              className="border-primary/30 hover:bg-primary/10"
+                            >
+                              {copiedKey === license.license_key ? (
+                                <Check className="w-4 h-4 text-green-500" />
+                              ) : (
+                                <Copy className="w-4 h-4" />
+                              )}
+                            </Button>
                           </div>
-                          {license.expires_at && (
-                            <div className="flex items-center gap-1">
-                              Истекает: {new Date(license.expires_at).toLocaleDateString()}
+
+                          <div className="grid grid-cols-2 gap-4 text-sm">
+                            <div>
+                              <p className="text-foreground/60 mb-1">Выдан</p>
+                              <p className="font-medium">
+                                {new Date(license.created_at).toLocaleDateString("ru-RU")}
+                              </p>
                             </div>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
+                            {license.expires_at && (
+                              <div>
+                                <p className="text-foreground/60 mb-1">Истекает</p>
+                                <p className="font-medium">
+                                  {new Date(license.expires_at).toLocaleDateString("ru-RU")}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </motion.div>
+                  ))}
+                </div>
+              )}
+            </TabsContent>
+
+            <TabsContent value="profile">
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4 }}
+              >
+                <ProfileCard user={user} profile={profile} onProfileUpdate={fetchProfile} />
+              </motion.div>
+            </TabsContent>
+          </Tabs>
+        </motion.div>
       </div>
     </div>
   );
