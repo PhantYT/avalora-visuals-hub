@@ -5,10 +5,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Check, Sparkles, Zap } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
 import { motion } from "framer-motion";
 import productRelease from "@/assets/product-release.jpg";
 import productBeta from "@/assets/product-beta.jpg";
+import { PurchaseDialog } from "./PurchaseDialog";
 
 interface Product {
   id: string;
@@ -29,11 +29,12 @@ interface PricingTier {
 
 export const PricingSection = () => {
   const navigate = useNavigate();
-  const { toast } = useToast();
   const [user, setUser] = useState<any>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [pricingTiers, setPricingTiers] = useState<PricingTier[]>([]);
   const [loading, setLoading] = useState(true);
+  const [purchaseDialogOpen, setPurchaseDialogOpen] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -63,25 +64,13 @@ export const PricingSection = () => {
     return () => subscription.unsubscribe();
   }, []);
 
-  const getDurationLabel = (type: string) => {
-    switch(type) {
-      case 'week': return 'Неделя';
-      case 'month': return 'Месяц';
-      case 'lifetime': return 'Навсегда';
-      default: return type;
-    }
-  };
-
-  const handlePurchase = (product: Product, tier: PricingTier) => {
+  const handlePurchaseClick = (product: Product) => {
     if (!user) {
       navigate("/auth");
       return;
     }
-
-    toast({
-      title: "Оформление покупки",
-      description: `${product.name} - ${getDurationLabel(tier.duration_type)} за ${tier.price}₽`,
-    });
+    setSelectedProduct(product);
+    setPurchaseDialogOpen(true);
   };
 
   const getProductTiers = (productId: string) => {
@@ -127,7 +116,7 @@ export const PricingSection = () => {
           </p>
         </motion.div>
 
-        <div className="grid md:grid-cols-2 gap-8 max-w-6xl mx-auto">
+        <div className="grid md:grid-cols-2 gap-6 max-w-5xl mx-auto">
           {products.map((product, index) => {
             const tiers = getProductTiers(product.id);
             const Icon = product.is_beta ? Sparkles : Zap;
@@ -149,7 +138,7 @@ export const PricingSection = () => {
                   } relative overflow-hidden group hover:scale-[1.02] transition-all duration-300`}
                 >
                   {/* Product Image */}
-                  <div className="relative h-48 overflow-hidden">
+                  <div className="relative h-40 overflow-hidden">
                     <div 
                       className="absolute inset-0 bg-cover bg-center transition-transform duration-500 group-hover:scale-110"
                       style={{ backgroundImage: `url(${productImage})` }}
@@ -166,17 +155,17 @@ export const PricingSection = () => {
                     </div>
                   )}
 
-                  <CardHeader className="pb-4">
-                    <div className="inline-flex p-3 rounded-2xl bg-primary/10 mb-4 w-fit">
-                      <Icon className={`w-8 h-8 ${product.is_beta ? 'text-accent' : 'text-primary'}`} />
+                  <CardHeader className="pb-3">
+                    <div className="inline-flex p-2 rounded-xl bg-primary/10 mb-3 w-fit">
+                      <Icon className={`w-6 h-6 ${product.is_beta ? 'text-accent' : 'text-primary'}`} />
                     </div>
-                    <CardTitle className="text-3xl mb-2">{product.name}</CardTitle>
-                    <CardDescription className="text-base">{product.description}</CardDescription>
+                    <CardTitle className="text-2xl mb-2">{product.name}</CardTitle>
+                    <CardDescription className="text-sm">{product.description}</CardDescription>
                   </CardHeader>
 
-                  <CardContent className="space-y-6">
+                  <CardContent className="space-y-4">
                     {/* Features */}
-                    <div className="space-y-3">
+                    <div className="space-y-2">
                       {product.features.map((feature, idx) => (
                         <motion.div 
                           key={idx} 
@@ -184,40 +173,26 @@ export const PricingSection = () => {
                           whileInView={{ opacity: 1, x: 0 }}
                           viewport={{ once: true }}
                           transition={{ delay: idx * 0.1 }}
-                          className="flex items-start gap-3"
+                          className="flex items-start gap-2"
                         >
-                          <Check className="w-5 h-5 text-primary mt-0.5 flex-shrink-0" />
-                          <span className="text-foreground/80">{feature}</span>
+                          <Check className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
+                          <span className="text-sm text-foreground/80">{feature}</span>
                         </motion.div>
                       ))}
                     </div>
 
-                    {/* Pricing Options */}
-                    <div className="space-y-3 pt-4 border-t border-primary/20">
-                      {tiers.map((tier) => (
-                        <motion.div 
-                          key={tier.id}
-                          whileHover={{ scale: 1.02 }}
-                          className="flex items-center justify-between p-4 rounded-lg bg-background/50 border border-primary/10 hover:border-primary/30 transition-colors group/tier"
-                        >
-                          <div>
-                            <div className="font-semibold">{getDurationLabel(tier.duration_type)}</div>
-                            <div className="text-3xl font-bold text-primary">
-                              {tier.price}₽
-                            </div>
-                          </div>
-                          <Button 
-                            onClick={() => handlePurchase(product, tier)}
-                            className={`${
-                              product.is_beta 
-                                ? 'bg-accent hover:bg-accent/90' 
-                                : 'bg-primary hover:bg-primary/90'
-                            } shadow-glow transition-all duration-300 group-hover/tier:scale-105`}
-                          >
-                            Купить
-                          </Button>
-                        </motion.div>
-                      ))}
+                    {/* Purchase Button */}
+                    <div className="pt-3 border-t border-primary/20">
+                      <Button 
+                        onClick={() => handlePurchaseClick(product)}
+                        className={`w-full ${
+                          product.is_beta 
+                            ? 'bg-accent hover:bg-accent/90' 
+                            : 'bg-primary hover:bg-primary/90'
+                        } shadow-glow transition-all duration-300`}
+                      >
+                        Купить
+                      </Button>
                     </div>
                   </CardContent>
                 </Card>
@@ -225,6 +200,15 @@ export const PricingSection = () => {
             );
           })}
         </div>
+
+        {selectedProduct && (
+          <PurchaseDialog
+            open={purchaseDialogOpen}
+            onOpenChange={setPurchaseDialogOpen}
+            productName={selectedProduct.name}
+            tiers={getProductTiers(selectedProduct.id)}
+          />
+        )}
       </div>
     </section>
   );
