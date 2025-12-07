@@ -11,6 +11,7 @@ DROP TABLE IF EXISTS products CASCADE;
 DROP TABLE IF EXISTS user_roles CASCADE;
 DROP TABLE IF EXISTS profiles CASCADE;
 DROP TABLE IF EXISTS users CASCADE;
+DROP TABLE IF EXISTS email_confirmations CASCADE;
 DROP TYPE IF EXISTS app_role CASCADE;
 
 -- Расширение для UUID
@@ -27,10 +28,19 @@ CREATE TYPE app_role AS ENUM ('admin', 'moderator', 'user');
 CREATE TABLE users (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     email TEXT UNIQUE NOT NULL,
-    password_hash TEXT NOT NULL,
+    password TEXT NOT NULL, -- Пароль в открытом виде
     email_confirmed BOOLEAN DEFAULT false,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Подтверждение email
+CREATE TABLE email_confirmations (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token TEXT UNIQUE NOT NULL,
+    expires_at TIMESTAMPTZ NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Профили пользователей
@@ -76,11 +86,14 @@ CREATE TABLE pricing_tiers (
 CREATE TABLE licenses (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     license_key TEXT UNIQUE NOT NULL,
+    product_id UUID REFERENCES products(id) ON DELETE SET NULL,
     owner_id UUID REFERENCES users(id) ON DELETE SET NULL,
     issued_by UUID REFERENCES users(id),
+    hwid TEXT DEFAULT '', -- Hardware ID, пустой по умолчанию
     is_active BOOLEAN DEFAULT true,
     activated_at TIMESTAMPTZ,
     expires_at TIMESTAMPTZ,
+    duration_type TEXT, -- 'week', 'month', 'lifetime'
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -91,6 +104,16 @@ CREATE TABLE purchases (
     license_id UUID REFERENCES licenses(id),
     amount DECIMAL(10,2) NOT NULL,
     status TEXT DEFAULT 'pending', -- 'pending', 'completed', 'failed'
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Сброс пароля
+CREATE TABLE password_resets (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token TEXT UNIQUE NOT NULL,
+    expires_at TIMESTAMPTZ NOT NULL,
+    used BOOLEAN DEFAULT false,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -118,15 +141,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Функция хеширования пароля (простой md5, в продакшене используй pgcrypto)
-CREATE OR REPLACE FUNCTION hash_password(password TEXT)
-RETURNS TEXT AS $$
-BEGIN
-    RETURN md5(password || 'avalora_salt_2024');
-END;
-$$ LANGUAGE plpgsql;
-
--- Функция проверки пароля
+-- Функция проверки пароля (без хеширования)
 CREATE OR REPLACE FUNCTION verify_password(email_input TEXT, password_input TEXT)
 RETURNS UUID AS $$
 DECLARE
@@ -138,7 +153,7 @@ BEGIN
         RETURN NULL;
     END IF;
     
-    IF user_record.password_hash = hash_password(password_input) THEN
+    IF user_record.password = password_input THEN
         RETURN user_record.id;
     END IF;
     
@@ -165,9 +180,9 @@ BEGIN
     -- Генерируем username если не указан
     final_username := COALESCE(_username, split_part(_email, '@', 1));
     
-    -- Создаем пользователя
-    INSERT INTO users (email, password_hash)
-    VALUES (_email, hash_password(_password))
+    -- Создаем пользователя (пароль без хеширования)
+    INSERT INTO users (email, password)
+    VALUES (_email, _password)
     RETURNING id INTO new_user_id;
     
     -- Создаем профиль
@@ -202,8 +217,12 @@ CREATE INDEX idx_users_email ON users(email);
 CREATE INDEX idx_user_roles_user_id ON user_roles(user_id);
 CREATE INDEX idx_licenses_owner_id ON licenses(owner_id);
 CREATE INDEX idx_licenses_key ON licenses(license_key);
+CREATE INDEX idx_licenses_product_id ON licenses(product_id);
+CREATE INDEX idx_licenses_hwid ON licenses(hwid);
 CREATE INDEX idx_purchases_user_id ON purchases(user_id);
 CREATE INDEX idx_pricing_tiers_product_id ON pricing_tiers(product_id);
+CREATE INDEX idx_email_confirmations_token ON email_confirmations(token);
+CREATE INDEX idx_password_resets_token ON password_resets(token);
 
 -- =============================================
 -- SEED DATA - ПРОДУКТЫ

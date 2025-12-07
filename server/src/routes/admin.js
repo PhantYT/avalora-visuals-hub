@@ -12,11 +12,13 @@ router.use(authenticate, requireAdmin);
 router.get('/users', async (req, res) => {
   try {
     const result = await db.query(
-      `SELECT u.id, u.email, u.username, u.created_at,
+      `SELECT u.id, u.email, u.email_confirmed, u.created_at,
+              p.username, p.avatar_url,
               array_agg(ur.role) as roles
        FROM users u
+       LEFT JOIN profiles p ON p.id = u.id
        LEFT JOIN user_roles ur ON u.id = ur.user_id
-       GROUP BY u.id
+       GROUP BY u.id, p.username, p.avatar_url
        ORDER BY u.created_at DESC`
     );
 
@@ -32,11 +34,15 @@ router.get('/licenses', async (req, res) => {
   try {
     const result = await db.query(
       `SELECT l.*, 
-              u.email as owner_email, u.username as owner_username,
-              p.name as product_name
+              u.email as owner_email,
+              p_profile.username as owner_username,
+              prod.name as product_name,
+              prod.slug as product_slug,
+              prod.is_beta as product_is_beta
        FROM licenses l
        LEFT JOIN users u ON l.owner_id = u.id
-       LEFT JOIN products p ON l.product_id = p.id
+       LEFT JOIN profiles p_profile ON l.owner_id = p_profile.id
+       LEFT JOIN products prod ON l.product_id = prod.id
        ORDER BY l.created_at DESC`
     );
 
@@ -47,11 +53,30 @@ router.get('/licenses', async (req, res) => {
   }
 });
 
+// Get products for license creation
+router.get('/products', async (req, res) => {
+  try {
+    const result = await db.query(`
+      SELECT p.*, 
+             json_agg(pt.*) as pricing_tiers
+      FROM products p
+      LEFT JOIN pricing_tiers pt ON pt.product_id = p.id
+      GROUP BY p.id
+      ORDER BY p.is_beta ASC
+    `);
+
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Products error:', error);
+    res.status(500).json({ error: 'Ошибка получения продуктов' });
+  }
+});
+
 // Generate license key
 function generateLicenseKey() {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
   const segments = 4;
-  const segmentLength = 4;
+  const segmentLength = 5;
   const parts = [];
   
   for (let i = 0; i < segments; i++) {
@@ -68,7 +93,7 @@ function generateLicenseKey() {
 // Create license
 router.post('/licenses', async (req, res) => {
   try {
-    const { product_id, duration_days, owner_email } = req.body;
+    const { product_id, duration_type, duration_days, owner_email, hwid } = req.body;
 
     const licenseKey = generateLicenseKey();
     const licenseId = uuidv4();
@@ -84,14 +109,15 @@ router.post('/licenses', async (req, res) => {
       }
     }
 
-    const expiresAt = duration_days 
-      ? new Date(Date.now() + duration_days * 24 * 60 * 60 * 1000)
-      : null;
+    let expiresAt = null;
+    if (duration_type !== 'lifetime' && duration_days) {
+      expiresAt = new Date(Date.now() + parseInt(duration_days) * 24 * 60 * 60 * 1000);
+    }
 
     await db.query(
-      `INSERT INTO licenses (id, license_key, product_id, owner_id, expires_at, issued_by, is_active)
-       VALUES ($1, $2, $3, $4, $5, $6, true)`,
-      [licenseId, licenseKey, product_id, ownerId, expiresAt, req.userId]
+      `INSERT INTO licenses (id, license_key, product_id, owner_id, expires_at, issued_by, is_active, duration_type, hwid, activated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, true, $7, $8, $9)`,
+      [licenseId, licenseKey, product_id, ownerId, expiresAt, req.userId, duration_type || null, hwid || '', ownerId ? new Date() : null]
     );
 
     res.status(201).json({
@@ -108,13 +134,42 @@ router.post('/licenses', async (req, res) => {
 // Update license
 router.patch('/licenses/:id', async (req, res) => {
   try {
-    const { is_active, expires_at } = req.body;
+    const { is_active, expires_at, hwid, product_id, duration_type } = req.body;
     const { id } = req.params;
 
+    const updates = [];
+    const values = [];
+    let paramIndex = 1;
+
+    if (is_active !== undefined) {
+      updates.push(`is_active = $${paramIndex++}`);
+      values.push(is_active);
+    }
+    if (expires_at !== undefined) {
+      updates.push(`expires_at = $${paramIndex++}`);
+      values.push(expires_at);
+    }
+    if (hwid !== undefined) {
+      updates.push(`hwid = $${paramIndex++}`);
+      values.push(hwid);
+    }
+    if (product_id !== undefined) {
+      updates.push(`product_id = $${paramIndex++}`);
+      values.push(product_id);
+    }
+    if (duration_type !== undefined) {
+      updates.push(`duration_type = $${paramIndex++}`);
+      values.push(duration_type);
+    }
+
+    if (updates.length === 0) {
+      return res.status(400).json({ error: 'Нет данных для обновления' });
+    }
+
+    values.push(id);
     await db.query(
-      `UPDATE licenses SET is_active = COALESCE($1, is_active), expires_at = COALESCE($2, expires_at)
-       WHERE id = $3`,
-      [is_active, expires_at, id]
+      `UPDATE licenses SET ${updates.join(', ')} WHERE id = $${paramIndex}`,
+      values
     );
 
     res.json({ message: 'Лицензия обновлена' });
